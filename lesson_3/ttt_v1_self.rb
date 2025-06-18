@@ -10,6 +10,11 @@
 
 board object...hash?
 
+Refactor:
+- Simplify game status check logic
+- Move game status check and display results to methods
+- Move encore flow to method
+
 Additional features:
 - Keep score
 - Player can enter name
@@ -73,6 +78,13 @@ def get_status(board, scoreboard)
   return 'Game continues...'
 end
 
+def update_board(board, input_square, computer_square, computer_takes_turn)
+  puts "--------------------------------"
+  puts "Player places an X on #{input_square.to_s}."
+  puts "Computer places an O on #{computer_square.to_s}." if computer_takes_turn
+  display_board(board)
+end
+
 def get_winner(board)
   WINNING_COMBOS.each do |combo| 
     return 'X' if combo.all? { |square| board[square] == 'X' }
@@ -82,7 +94,7 @@ def get_winner(board)
 end
 
 def board_full?(board)
-  board.count { |_, v| v == ' ' } == 9
+  !board.value?(' ')
 end
 
 # Initialize series variables:
@@ -124,9 +136,18 @@ loop do
     puts "Where would you like to place your piece?"
     input_square = get_input(board)
     place_marker(board, 'X', input_square)
+    game_status = get_status(board, scoreboard)
+    
+    computer_takes_turn = false
+
+    # Check game status:
+    unless game_status == 'Game continues...'
+      update_board(board, input_square, computer_square, computer_takes_turn)
+      puts game_status
+      break
+    end
 
     # Computer places marker:
-    computer_takes_turn = false
     unless board_full?(board)
       computer_square = generate_square(board)
       place_marker(board, 'O', computer_square)
@@ -134,10 +155,7 @@ loop do
     end
 
     # Update board
-    puts "--------------------------------"
-    puts "Player places an X on #{input_square.to_s}."
-    puts "Computer places an O on #{computer_square.to_s}." if computer_takes_turn
-    display_board(board)
+    update_board(board, input_square, computer_square, computer_takes_turn)
 
     # Check game status:
     game_status = get_status(board, scoreboard)
