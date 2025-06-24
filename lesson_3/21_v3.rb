@@ -71,13 +71,18 @@ def display_player_turn(game, round)
   puts
 
   sleep(1)
+
   puts "On the table:"
+
   sleep(1)
+  
   output "#{game[:dealer_name]} showing: #{round[:dealer_hand][0][:name]} and a hidden card."
   puts
   print_hand(round[:player_hand], game[:player_name])
   print_points(game, get_points(game, round[:player_hand]), game[:player_name])
+  
   sleep(1)
+  
   puts
 end
 
@@ -87,7 +92,9 @@ def display_dealer_turn(game, round)
   puts '============================================================'
   puts
   puts "It's #{game[:dealer_name]}'s turn..."
+
   sleep(1)
+  
   print_hand(round[:player_hand], game[:player_name])
   print_points(game, get_points(game, round[:player_hand]), game[:player_name])
   puts
@@ -174,14 +181,16 @@ def perform_user_action(game, round, deck)
   display_player_turn(game, round)
   until get_valid_input('Would you like to (h)it or (s)tay?', %w[h s]) == 's'
     output "#{game[:player_name]} hits..."
+
     sleep(1)
+    
     drawn_card = deck.pop
     round[:player_hand] << drawn_card
-    
     output "#{game[:player_name]} draws a #{drawn_card[:name]}"
-    sleep(1)
-    round[:player_points] = get_points(game, round[:player_hand])
     
+    sleep(1)
+    
+    round[:player_points] = get_points(game, round[:player_hand])
     print_points(game, get_points(game, round[:player_hand]), game[:player_name])
     break if round[:player_points] == 'Bust'
     puts
@@ -194,24 +203,29 @@ def perform_dealer_action(game, round, deck)
   display_dealer_turn(game, round)
   print_hand(round[:dealer_hand], game[:dealer_name])
   round[:dealer_points] = get_points(game, round[:dealer_hand])
+  
   sleep(2)
+
   puts
   until round[:dealer_points] == 'Bust'|| round[:dealer_points] >= (game[:blackjack] - 4)
     output "#{game[:dealer_name]} hits..."
     drawn_card = deck.pop
     round[:dealer_hand] << drawn_card
     round[:dealer_points] = get_points(game, round[:dealer_hand])
+    
     sleep(1)
 
     output "Dealer draws a #{drawn_card[:name]}."
     puts
     sleep(1)
   end
+  
   if round[:dealer_points] == 'Bust'
     output "Dealer busts!"
   else
     output "#{game[:dealer_name]} sits with #{round[:dealer_points]} points."
   end
+  
   puts
   prompt_user_continue
 end
