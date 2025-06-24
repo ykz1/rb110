@@ -60,9 +60,9 @@ def initialize_deck(deck)
         suite:      suite,
         face:       face,
         name:       "#{face} of #{suite}",
-        values:     [get_values(face)].flatten,
+        values:     get_values(face),
         position:   'Deck',
-        visibility: 'Private'
+        visibility: 'Public'
       }
     end
   end
@@ -74,7 +74,7 @@ def initialize_game(game, players)
     game[player_key] = {
       hand:         [],
       hand_values:  [],
-      hand_points:  nil,
+      points:  nil,
       hands_won:    0
     }
     game[player_key][:name] = player[:name]
@@ -83,11 +83,15 @@ def initialize_game(game, players)
   end
 end
 
+def get_player_count(game)
+  game.keys.count { |player_key| player_key != :dealer }
+end
+
 def get_values(face)
   case face
-  when '2'..'9' then face.to_i
+  when '2'..'9' then [face.to_i]
   when 'Ace' then [1, 11]
-  else 10
+  else [10]
   end
 end
 
@@ -97,8 +101,8 @@ def deal_initial_cards(game, deck)
     deal!(game, deck, player_key)
     deal!(game, deck, player_key)
   end
-  # For dealer, make first card public
-  deck[game[:dealer][:hand][0]][:visibility] = 'Public'
+  # For dealer, make first card private
+  deck[game[:dealer][:hand][0]][:visibility] = 'Private'
 end
 
 def deal!(game, deck, player_key, cards=1) # Deals 1 card to a player and returns the dealt card's key
@@ -126,7 +130,7 @@ def update_hand(game, deck, player_key, card_key)
   end
   # Save hand value(s) to game state object:
   game[player_key][:hand_values] = hand_values
-  game[player_key][:hand_points] = get_best_value(game, player_key)
+  game[player_key][:points] = get_best_value(game, player_key)
 end
 
 def get_best_value(game, player)
@@ -134,11 +138,24 @@ def get_best_value(game, player)
   game[player][:hand_values].select { |value| value <= 21 }.max
 end
 
-def display_table(game, deck)
+def display_header_after_clear
   system 'clear'
   puts '=================================='
-  puts # Add some info on game state
-  print_non_human_hands(game, deck)
+end
+
+def display_welcome_screen # not used yet
+  display_header_after_clear
+  puts 'Welcome to Twenty One'
+  puts
+end
+
+def display_table(game, deck, hide_dealer=true)
+  display_header_after_clear
+  puts
+  print_other_hands(game, deck, hide_dealer)
+  puts
+  print_hand(game, deck, :player1)
+  print_hand_value(game, :player1)
   puts
   puts "#{get_undealt_cards(deck).count} cards remain in the deck."
   puts
@@ -146,32 +163,31 @@ def display_table(game, deck)
   puts
 end
 
-def display_player1_hand(game, deck)
-  print_hand(game, deck, :player1)
-  print_hand_value(game, :player1)
-end
-
-def print_non_human_hands(game, deck)
+def print_other_hands(game, deck, hide_dealer=true)
   game.each do |player_key, player|
     next if player_key == :player1
-
-    shown_cards = []
-    hidden_cards = 0
-    player[:hand].each do |card_key|
-      if deck[card_key][:visibility] == 'Public'
-        shown_cards << deck[card_key][:name]
-      else
-        hidden_cards += 1
+    if player_key == :dealer && hide_dealer == false
+      print_hand(game, deck, :dealer)
+      print_hand_value(game, :dealer)
+    else
+      shown_cards = []
+      hidden_cards = 0
+      player[:hand].each do |card_key|
+        if deck[card_key][:visibility] == 'Public'
+          shown_cards << deck[card_key][:name]
+        else
+          hidden_cards += 1
+        end
       end
-    end
 
-    display_text = "#{player[:name]} has: #{joinand(shown_cards)}"
-    display_text << case hidden_cards
-                    when 0 then ''
-                    when 1 then ' and 1 hidden card.'
-                    else " and #{hidden_cards} hidden cards."
-                    end
-    puts display_text
+      display_text = "#{player[:name]} has: #{joinand(shown_cards)}"
+      display_text << case hidden_cards
+                      when 0 then ''
+                      when 1 then ' and 1 hidden card.'
+                      else " and #{hidden_cards} hidden cards."
+                      end
+      puts display_text
+      end
   end
 end
 
@@ -181,11 +197,13 @@ def print_hand(game, deck, player_key)
 end
 
 def print_hand_value(game, player_key)
-  pretext = (player_key == :player1 ? 'Your' : "#{game[player_key][:name]}'s")
-  puts  case game[player_key][:hand_points]
-        when 'Bust' then 'Your hand is bust!'
-        else "#{pretext} best hand makes #{game[player_key][:hand_points]} points."
-        end
+  message = (player_key == :player1 ? 'Your ' : "#{game[player_key][:name]}'s ")
+  message <<  case game[player_key][:points]
+              when 'Bust' then 'hand is busted!'
+              else "best hand makes #{game[player_key][:points]} points."
+              end
+  message << " BlackJack!" if game[player_key][:points] == 21
+  puts message
 end
 
 def joinand(arr, str1=', ', str2=' and ') # done
@@ -204,7 +222,7 @@ def perform_players_actions(game, deck)
   players.each do |player_key, player_data|
     if player_data[:type] == 'Human'
       perform_human_actions(game, deck, player_key)
-      return if bust?(game, :player1)
+      print_hand_value(game, player_key)
     else
       perform_computer_actions(game, deck, player_key)
     end
@@ -212,7 +230,7 @@ def perform_players_actions(game, deck)
 end
 
 def perform_computer_actions(game, deck, player_key)
-  # write this later when multiplayer
+  # write this later when making multiplayer
 
   # easy computer: hit unless best hand >=15
   # medium computer: hit unless best hand >= 17
@@ -220,36 +238,68 @@ def perform_computer_actions(game, deck, player_key)
 end
 
 def perform_human_actions(game, deck, player_key)
-  until get_valid_input("\nWould you like to (h)it or (s)tay?", %w[h s]) == 's'
-    dealt_card = deal!(game, deck, player_key, 1)
-    display_table(game, deck)
-    puts "You were dealt #{deck[dealt_card][:name]}..."
-    puts
-    print_hand(game, deck, :player1)
-    print_hand_value(game, :player1)
-    puts
-    break if bust?(game, player_key)
-    if blackjack?(game, player_key)
-      puts "BlackJack!"
-      break
-    end
+  if blackjack?(game, player_key)
+    puts "You have 21 points...BlackJack!"
+    return
   end
+  sleep(1)
+  puts '...'
+  sleep(1)
+  until get_valid_input("Would you like to (h)it or (s)tay?\n ", %w[h s]) == 's'
+    dealt_card = deal!(game, deck, player_key, 1)
+    puts "You were dealt #{deck[dealt_card][:name]}..."
+    sleep(1)
+    puts '...'
+    sleep(1)
+    break if bust?(game, player_key) || blackjack?(game, player_key)
+  end
+  print_hand(game, deck, player_key)
+  print_hand_value(game, player_key)
+  sleep(3)
 end
 
 def perform_dealer_actions(game, deck)
+  display_header_after_clear
+  print_hand(game, deck, :dealer)
+  print_hand_value(game, :dealer)
+  puts
+  until game[:dealer][:points] == 'Bust' || game[:dealer][:points] >= 17
+    drawn_card = deal!(game, deck, :dealer)
+    puts
+    puts "Dealer hits!"
+    puts "...it's a #{deck[drawn_card][:name]}..."
+    print_hand_value(game, :dealer)
+    sleep(3)
+  end
+  puts "Dealer stays..."
+  print_hand(game, deck, :dealer)
+end
+
+def perform_dealer_actions_advanced(game, deck)
+  # Dealer action logic:
+  # - Sit if all other players are bust
+  # - In single player: hit if hand lower than player's hand
+  # - In multi-player (i.e. dealer plus 2 or more players)
+  #   - If has ace, hit if hand under 19
+  #   - If no ace, hit if hand under 17
   # Hit if dealer hand lower than player hand
-  value_to_beat = game.keys.select{ |k| k != :dealer && game[k][:hand_points] != 'Bust' }.map { |k| game[k][:hand_points]}.max
-  until (value_to_beat == nil) || (game[:dealer][:hand_points] >= value_to_beat) || (game[:dealer][:hand_points] == 'Bust')
+  if get_player_count(game) == 1
+    value_to_beat = game.keys.select{ |k| k != :dealer && game[k][:points] != 'Bust' }.map { |k| game[k][:points]}.max
+  else
+    value_to_beat = 17
+  end
+
+  until (value_to_beat == nil) || (game[:dealer][:points] >= value_to_beat) || (game[:dealer][:points] == 'Bust')
     deal!(game, deck, :dealer)
   end
 end
 
 def bust?(game, player_key)
-  game[player_key][:hand_points] == 'Bust'
+  game[player_key][:points] == 'Bust'
 end
 
 def blackjack?(game, player_key)
-  game[player_key][:hand_points] == 21
+  game[player_key][:points] == 21
 end
 
 def get_valid_input(prompt, valid_choices, invalid_prompt='Invalid entry!')
@@ -268,28 +318,32 @@ def get_non_dealer_players(game)
 end
 
 def display_results(game, deck)
-  system 'clear'
-  puts '=================================='
-  puts # Add some info on game state
-  display_player1_hand(game, deck)
+  display_header_after_clear
   puts
-  display_dealer_hand(game, deck)
+  print_other_hands(game, deck, false)
   puts
-  if game[:player1][:hand_points] == 'Bust' || (game[:dealer][:hand_points] != 'Bust' && game[:player1][:hand_points] < game[:dealer][:hand_points])
-    puts "You lose!"
-  elsif game[:dealer][:hand_points] == 'Bust' || game[:player1][:hand_points] > game[:dealer][:hand_points]
-    puts "You win!"
-  else
+  print_hand(game, deck, :player1)
+  print_hand_value(game, :player1)
+  puts  
+  # Logic:
+  # - both bust = tie
+  # - one bust, other not = non-bust wins
+  # - higher point wins
+  player1_points = game[:player1][:points]
+  dealer_points = game[:dealer][:points]
+  player1_busted = (player1_points == 'Bust')
+  dealer_busted = (dealer_points == 'Bust')
+
+  if player1_points == dealer_points
     puts "It's a tie!"
+  elsif player1_busted || (!dealer_busted && (dealer_points > player1_points))
+    puts "You lose!"
+  else
+    puts "You win!"
   end
-
   puts
 end
 
-def display_dealer_hand(game, deck)
-  print_hand(game, deck, :dealer)
-  print_hand_value(game, :dealer)
-end
 
 
 def get_encore
@@ -306,9 +360,7 @@ loop do
   initialize_game(game, players)
 
   deal_initial_cards(game, deck)
-
   display_table(game, deck)
-  display_player1_hand(game, deck)
 
   perform_players_actions(game, deck) # write this method
   perform_dealer_actions(game, deck) # write this method
@@ -321,8 +373,13 @@ loop do
 end
 
 
-# To do
-# Add conditions for BlackJack
-# Refactor logic around checking win conditions
-# Short-circuit if: 1) player bust; 2)...any others?
-# Add logic for keeping score
+
+
+# All "Display" methods should clear screen and display new data
+# All "Print" methods should print smaller bits of information on top of existing screen
+# When to refresh screen? 
+# 1) initial settings screen (to be built); 
+# 2) initial hand dealt; 
+# 3) to take player action; 
+# 4) to show dealer action, with waits; 
+# 5) to show final results and ask to play again
